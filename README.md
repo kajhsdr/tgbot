@@ -7,7 +7,8 @@ TGbot是一个功能强大的Telegram机器人，主要用于管理京东Cookie�
 1. **京东Cookie管理**
    - 自动从主青龙面板获取CK并保存到文件
    - 将CK同步到多个青龙面板，保留原始备注
-   - 支持保留指定的CK（通过pt_pin设置）
+   - 支持按pt_pin筛选CK，可设置保留或排除特定CK
+   - 支持将不同的CK保存到不同的文件中
 
 2. **IP白名单管理**
    - 自动检测IP变动并更新白名单
@@ -16,6 +17,7 @@ TGbot是一个功能强大的Telegram机器人，主要用于管理京东Cookie�
 3. **青龙面板交互**
    - 支持配置多个青龙面板
    - 查询CK状态和管理面板CK
+   - 支持为每个面板单独设置CK同步规则
 
 4. **系统管理功能**
    - 查看系统运行状态
@@ -73,21 +75,53 @@ pip install -r requirements.txt
    - `CLIENT_SECRET`: 主青龙面板的Client Secret
    - `QL_PANELS`: 其他青龙面板配置列表，用于CK同步
 
-3. **Redis数据库配置**
+3. **CK同步和保留配置**
+   - `PRESERVED_PT_PINS`: CK同步配置，可为每个面板单独设置保留规则
+     ```json
+     {
+       "default": {                 // 默认配置，当面板名称未单独配置时使用
+         "pins": ["pin1", "pin2"], // pt_pin列表
+         "mode": "exclude"         // exclude表示不同步列表中的CK，include表示只同步列表中的CK
+       },
+       "panel_name_1": {           // 特定面板的配置
+         "pins": ["special_pin"],
+         "mode": "include"
+       }
+     }
+     ```
+
+   - `CK_FILE_PATH`: CK文件路径配置，可为每个文件设置筛选规则
+     ```json
+     {
+       "default": {                 // 默认配置
+         "path": "path/to/ck.txt", // 文件路径
+         "pins": ["pin1", "pin2"], // pt_pin列表
+         "mode": "exclude"         // exclude表示不保存列表中的CK，include表示只保存列表中的CK
+       },
+       "backup": {                 // 备份文件配置
+         "path": "path/to/backup.txt",
+         "pins": ["special_pin"],
+         "mode": "include"
+       }
+     }
+     ```
+
+4. **Redis数据库配置**
    - `REDIS_HOST`: Redis服务器地址
    - `REDIS_PORT`: Redis服务器端口
    - `REDIS_DB`: Redis数据库编号
    - `REDIS_PASSWORD`: Redis数据库密码
 
-4. **代理API配置**
+5. **代理API配置**
    - `PROXY_AUTH_KEY`: 代理API认证密钥
    - `PROXY_API_URL`: 代理API地址，用于获取和更新IP白名单
 
-5. **文件路径配置**
-   - `CK_FILE_PATH`: CK文件路径，用于存储和读取CK
+6. **其他配置**
+   - `CURRENT_IP_KEY`: Redis中存储当前IP的键名
+   - `CURRENT_CK_HASH_KEY`: Redis中存储当前CK哈希值的键名
    - `LOG_DIR`: 日志文件目录
 
-6. **定时任务配置**
+7. **定时任务配置**
    - `CK_UPDATE_INTERVAL`: CK更新间隔（分钟）
    - `IP_UPDATE_INTERVAL`: IP白名单更新间隔（分钟）
    - `CK_SYNC_INTERVAL`: CK同步到其他面板的间隔（分钟）
@@ -131,12 +165,27 @@ python tgbot.py
 - `/ql disable <序号>` - 禁用指定CK
 - `/ql delete <序号>` - 删除指定CK
 
+### CK同步和保留功能
+
+程序提供了灵活的CK同步和保留功能：
+
+1. **面板间CK同步**
+   - 可以通过`PRESERVED_PT_PINS`配置为每个面板设置不同的同步规则
+   - 支持include模式（只同步列表中的CK）和exclude模式（不同步列表中的CK）
+   - 默认配置适用于未单独配置的面板
+
+2. **多文件CK保存**
+   - 可以通过`CK_FILE_PATH`配置将不同的CK保存到不同的文件中
+   - 每个文件可以设置自己的筛选规则
+   - 支持include模式（只保存列表中的CK）和exclude模式（不保存列表中的CK）
+
 ## 注意事项
 
 1. 请确保Redis服务器已正确配置并运行
 2. 青龙面板需要配置正确的Client ID和Client Secret
 3. 程序会自动创建必要的目录和文件
 4. 定时任务会在后台自动运行，无需手动触发
+5. 敏感信息（如API密钥、令牌等）应妥善保管，不要泄露
 
 ## 常见问题
 
@@ -146,8 +195,12 @@ python tgbot.py
 
 ### CK同步失败
 
-请检查各青龙面板的配置是否正确，特别是URL、Client ID和Client Secret。
+请检查各青龙面板的配置是否正确，特别是URL、Client ID和Client Secret。同时，确认`PRESERVED_PT_PINS`配置是否正确设置。
 
 ### Redis连接错误
 
 确保Redis服务器已启动，并且配置的主机、端口和密码正确。
+
+### CK文件保存问题
+
+如果CK未正确保存到文件，请检查`CK_FILE_PATH`配置是否正确，以及文件路径是否存在或可写入。

@@ -59,8 +59,13 @@ def load_config():
             # 新增的青龙面板配置列表
             'QL_PANELS': [],
             
-            # 需要保留的pt_pin列表
-            'PRESERVED_PT_PINS': [],
+            # 需要保留的pt_pin配置
+            'PRESERVED_PT_PINS': {
+                'default': {
+                    'pins': [],
+                    'mode': 'exclude'
+                }
+            },
             
             # Redis 数据库配置
             'REDIS_HOST': 'localhost', 
@@ -73,7 +78,13 @@ def load_config():
             'PROXY_API_URL': "",
             
             # 文件和存储配置
-            'CK_FILE_PATH': "scripts/beta/env/ck.txt",
+            'CK_FILE_PATH': {
+                'default': {
+                    'path': "scripts/beta/env/ck.txt",
+                    'pins': [],
+                    'mode': 'exclude'
+                }
+            },
             'CURRENT_IP_KEY': "current_ip",
             'CURRENT_CK_HASH_KEY': "current_ck_hash",
             'LOG_DIR': "logs/scripts",
@@ -360,13 +371,67 @@ class QingLongAPI:
             return False, f"添加出错: {str(e)}"
 
 async def save_cookies_to_file(cookies):
-    """保存 Cookies 到文件"""
+    """保存 Cookies 到文件，根据配置筛选保存"""
     try:
-        os.makedirs(os.path.dirname(CONFIG['CK_FILE_PATH']), exist_ok=True)
-        async with aiofiles.open(CONFIG['CK_FILE_PATH'], 'w') as f:
-            await f.write("\n".join(cookies))
-        logger.info(f"✅ 已保存 {len(cookies)} 条 CK")
-        return True
+        # 获取CK_FILE_PATH配置
+        ck_file_config = CONFIG['CK_FILE_PATH']
+        
+        # 检查配置格式
+        if isinstance(ck_file_config, str):
+            # 兼容旧格式
+            os.makedirs(os.path.dirname(ck_file_config), exist_ok=True)
+            async with aiofiles.open(ck_file_config, 'w') as f:
+                await f.write("\n".join(cookies))
+            logger.info(f"✅ 已保存 {len(cookies)} 条 CK 到 {ck_file_config}")
+            return True
+        elif isinstance(ck_file_config, dict):
+            # 新格式，支持按pin筛选
+            saved_count = 0
+            for config_name, config in ck_file_config.items():
+                # 获取文件路径和筛选规则
+                if isinstance(config, str):
+                    # 简单格式，只有路径
+                    file_path = config
+                    filtered_cookies = cookies
+                else:
+                    # 完整格式，包含路径和筛选规则
+                    file_path = config.get('path')
+                    pins = config.get('pins', [])
+                    mode = config.get('mode', 'exclude')
+                    
+                    # 清理pins中的格式
+                    clean_pins = [pin.replace("pt_pin=", "").strip(';') for pin in pins]
+                    
+                    # 根据规则筛选CK
+                    filtered_cookies = []
+                    for cookie in cookies:
+                        pt_pin = extract_pt_pin(cookie)
+                        is_in_list = pt_pin in clean_pins
+                        
+                        # include模式：只保存列表中的pin
+                        # exclude模式：不保存列表中的pin
+                        should_save = (mode == 'include' and is_in_list) or (mode == 'exclude' and not is_in_list)
+                        
+                        if should_save:
+                            filtered_cookies.append(cookie)
+                
+                # 保存筛选后的CK到文件
+                if file_path and filtered_cookies:
+                    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+                    async with aiofiles.open(file_path, 'w') as f:
+                        await f.write("\n".join(filtered_cookies))
+                    logger.info(f"✅ 已保存 {len(filtered_cookies)} 条 CK 到 {file_path} ({config_name})")
+                    saved_count += len(filtered_cookies)
+            
+            if saved_count > 0:
+                logger.info(f"✅ 总共保存了 {saved_count} 条 CK 到各个文件")
+                return True
+            else:
+                logger.warning("⚠️ 没有CK被保存到文件")
+                return False
+        else:
+            logger.error(f"❌ CK_FILE_PATH 配置格式错误: {ck_file_config}")
+            return False
     except Exception as e:
         logger.error(f"❌ 保存 CK 失败: {e}")
         return False
@@ -379,16 +444,45 @@ def extract_pt_pin(cookie_str):
             return part.strip().replace("pt_pin=", "")
     return None
 
-def should_preserve_cookie(pt_pin):
-    """判断是否应该保留这个cookie（基于pt_pin）"""
+def should_preserve_cookie(pt_pin, panel_name=None):
+    """判断是否应该保留这个cookie（基于pt_pin和面板名称）
+    
+    Args:
+        pt_pin: Cookie的pt_pin值
+        panel_name: 面板名称，如果为None则使用默认配置
+        
+    Returns:
+        bool: 是否应该保留该Cookie
+    """
     if not pt_pin:
         return False
-        
-    for preserved in CONFIG['PRESERVED_PT_PINS']:
-        preserved_clean = preserved.replace("pt_pin=", "").strip(';')
-        if preserved_clean == pt_pin:
-            return True
-    return False
+    
+    # 获取PRESERVED_PT_PINS配置
+    preserved_config = CONFIG['PRESERVED_PT_PINS']
+    
+    # 确定使用哪个面板的配置
+    panel_config = None
+    if panel_name and panel_name in preserved_config:
+        panel_config = preserved_config[panel_name]
+    else:
+        panel_config = preserved_config.get('default', {'pins': [], 'mode': 'exclude'})
+    
+    # 获取配置中的pins列表和模式
+    pins = panel_config.get('pins', [])
+    mode = panel_config.get('mode', 'exclude')
+    
+    # 清理pins中的格式
+    clean_pins = [pin.replace("pt_pin=", "").strip(';') for pin in pins]
+    
+    # 根据模式判断是否保留
+    is_in_list = pt_pin in clean_pins
+    
+    # include模式：只保留列表中的pin
+    # exclude模式：不保留列表中的pin
+    if mode == 'include':
+        return is_in_list
+    else:  # exclude模式
+        return not is_in_list
 
 # ================ IP 白名单操作 ================
 async def get_current_ip():
@@ -497,13 +591,13 @@ async def sync_ck_to_panels():
                         'deleted_count': 0
                     }
                 
-                # 找出需要删除的CK（非保留名单）
+                # 找出需要删除的CK（根据面板特定的配置）
                 to_delete_ids = []
                 preserved_pins = []
                 
                 for cookie in cookies_info:
                     pt_pin = extract_pt_pin(cookie['pt_pin'])
-                    if should_preserve_cookie(pt_pin):
+                    if should_preserve_cookie(pt_pin, api.name):
                         preserved_pins.append(pt_pin)
                     else:
                         to_delete_ids.append(cookie['id'])
@@ -548,10 +642,25 @@ async def sync_ck_to_panels():
         total_deleted = sum(result['deleted_count'] for result in clean_results if result['success'])
         logger.info(f"✅ 已从其他面板清理 {total_deleted} 条非保留CK")
         
-        # 步骤4: 将主面板的CK添加到其他面板（保留原始备注）
+        # 步骤4: 根据面板配置将主面板的CK添加到其他面板（保留原始备注）
         async def add_cookies_to_panel(api):
             try:
-                success, message = await api.add_cookies(main_cookies_with_remarks)
+                # 根据面板配置筛选需要添加的CK
+                filtered_cookies = []
+                for cookie_info in main_cookies_with_remarks:
+                    pt_pin = extract_pt_pin(cookie_info['value'])
+                    # 如果should_preserve_cookie返回True，表示这个CK应该被保留（即应该被同步）
+                    if should_preserve_cookie(pt_pin, api.name):
+                        filtered_cookies.append(cookie_info)
+                
+                if not filtered_cookies:
+                    return {
+                        'name': api.name,
+                        'success': True,
+                        'message': "根据配置，没有需要添加的CK"
+                    }
+                
+                success, message = await api.add_cookies(filtered_cookies)
                 return {
                     'name': api.name,
                     'success': success,
@@ -707,21 +816,58 @@ class CkWhitelistBot:
     async def ck_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """处理 /ckstatus 命令"""
         try:
-            ck_count, ck_last_update_time = 0, "未知"
+            ck_file_config = CONFIG['CK_FILE_PATH']
+            status_text = "🍪 **CK 状态**\n\n"
             
-            if os.path.exists(CONFIG['CK_FILE_PATH']):
-                with open(CONFIG['CK_FILE_PATH'], "r") as ck_file:
-                    ck_count = sum(1 for line in ck_file if line.strip())
-                ck_last_update = os.path.getmtime(CONFIG['CK_FILE_PATH'])
-                ck_last_update_time = datetime.fromtimestamp(ck_last_update, LOCAL_TIMEZONE).strftime('%Y-%m-%d %H:%M:%S')
+            # 处理不同格式的CK_FILE_PATH配置
+            if isinstance(ck_file_config, str):
+                # 旧格式，单一文件路径
+                ck_count, ck_last_update_time = 0, "未知"
+                
+                if os.path.exists(ck_file_config):
+                    with open(ck_file_config, "r") as ck_file:
+                        ck_count = sum(1 for line in ck_file if line.strip())
+                    ck_last_update = os.path.getmtime(ck_file_config)
+                    ck_last_update_time = datetime.fromtimestamp(ck_last_update, LOCAL_TIMEZONE).strftime('%Y-%m-%d %H:%M:%S')
+                
+                status_text += f"总数量: `{ck_count}`\n"
+                status_text += f"最后更新时间: `{ck_last_update_time}`\n"
+                status_text += f"存储路径: `{ck_file_config}`\n"
             
-            await update.message.reply_text(
-                "🍪 **CK 状态**\n\n"
-                f"总数量: `{ck_count}`\n"
-                f"最后更新时间: `{ck_last_update_time}`\n"
-                f"存储路径: `{CONFIG['CK_FILE_PATH']}`\n",
-                parse_mode="Markdown"
-            )
+            elif isinstance(ck_file_config, dict):
+                # 新格式，多文件配置
+                total_count = 0
+                status_text += "**文件列表:**\n"
+                
+                for config_name, config in ck_file_config.items():
+                    file_path = config if isinstance(config, str) else config.get('path')
+                    
+                    if file_path and os.path.exists(file_path):
+                        with open(file_path, "r") as ck_file:
+                            file_ck_count = sum(1 for line in ck_file if line.strip())
+                        ck_last_update = os.path.getmtime(file_path)
+                        ck_last_update_time = datetime.fromtimestamp(ck_last_update, LOCAL_TIMEZONE).strftime('%Y-%m-%d %H:%M:%S')
+                        
+                        status_text += f"\n📄 **{config_name}**\n"
+                        status_text += f"  - 数量: `{file_ck_count}`\n"
+                        status_text += f"  - 更新时间: `{ck_last_update_time}`\n"
+                        status_text += f"  - 路径: `{file_path}`\n"
+                        
+                        # 如果有筛选规则，显示规则信息
+                        if isinstance(config, dict) and 'mode' in config:
+                            pins_count = len(config.get('pins', []))
+                            mode_text = "只保存列表中的CK" if config.get('mode') == 'include' else "不保存列表中的CK"
+                            status_text += f"  - 筛选规则: `{mode_text} ({pins_count}个pin)`\n"
+                        
+                        total_count += file_ck_count
+                    else:
+                        status_text += f"\n📄 **{config_name}**\n"
+                        status_text += f"  - 状态: `文件不存在`\n"
+                        status_text += f"  - 路径: `{file_path}`\n"
+                
+                status_text += f"\n**总CK数量: `{total_count}`**\n"
+            
+            await update.message.reply_text(status_text, parse_mode="Markdown")
         except Exception as e:
             await update.message.reply_text(f"❌ 获取 CK 状态出错: {e}")
     
@@ -976,10 +1122,33 @@ class CkWhitelistBot:
                     result_text += f"🔹 **{panel_data['name']}**: "
                     result_text += f"总数{len(cookies_info)} 启用{enabled_count} 禁用{disabled_count} 保留{preserved_count}\n"
                 
-                # 显示保留的pt_pin列表
-                result_text += "\n⭐ **保留名单**:\n"
-                preserved_pins = [pin.replace("pt_pin=", "").strip(';') for pin in CONFIG['PRESERVED_PT_PINS'] if pin]
-                result_text += ", ".join(f"`{pin}`" for pin in preserved_pins) if preserved_pins else "无保留账号"
+                # 显示保留的pt_pin配置
+                result_text += "\n⭐ **CK同步配置**:\n"
+                preserved_config = CONFIG['PRESERVED_PT_PINS']
+                
+                # 显示默认配置
+                default_config = preserved_config.get('default', {'pins': [], 'mode': 'exclude'})
+                default_mode = "仅同步" if default_config.get('mode') == 'include' else "不同步"
+                default_pins = default_config.get('pins', [])
+                clean_default_pins = [pin.replace("pt_pin=", "").strip(';') for pin in default_pins if pin]
+                
+                result_text += f"**默认配置**: {default_mode}列表中的CK\n"
+                result_text += ", ".join(f"`{pin}`" for pin in clean_default_pins) if clean_default_pins else "无特定账号"
+                result_text += "\n\n"
+                
+                # 显示每个面板的特定配置
+                panel_configs = [name for name in preserved_config.keys() if name != 'default']
+                if panel_configs:
+                    result_text += "**面板特定配置**:\n"
+                    for panel_name in panel_configs:
+                        panel_config = preserved_config[panel_name]
+                        panel_mode = "仅同步" if panel_config.get('mode') == 'include' else "不同步"
+                        panel_pins = panel_config.get('pins', [])
+                        clean_panel_pins = [pin.replace("pt_pin=", "").strip(';') for pin in panel_pins if pin]
+                        
+                        result_text += f"- **{panel_name}**: {panel_mode}列表中的CK\n"
+                        result_text += ", ".join(f"`{pin}`" for pin in clean_panel_pins) if clean_panel_pins else "无特定账号"
+                        result_text += "\n"
                 
                 await msg.edit_text(result_text, parse_mode="Markdown")
                 
@@ -997,13 +1166,13 @@ class CkWhitelistBot:
                                 'deleted_count': 0
                             }
                         
-                        # 找出需要删除的CK（非保留名单）
+                        # 找出需要删除的CK（根据面板特定的配置）
                         to_delete_ids = []
                         preserved_pins = []
                         
                         for cookie in cookies_info:
                             pt_pin = extract_pt_pin(cookie['pt_pin'])
-                            if should_preserve_cookie(pt_pin):
+                            if should_preserve_cookie(pt_pin, api.name):
                                 preserved_pins.append(pt_pin)
                             else:
                                 to_delete_ids.append(cookie['id'])

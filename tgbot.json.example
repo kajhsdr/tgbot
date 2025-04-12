@@ -51,13 +51,30 @@
         },
         
         "PRESERVED_PT_PINS": {
-            "value": [
-                "preserved_pt_pin_1",
-                "preserved_pt_pin_2",
-                "preserved_pt_pin_3",
-                "preserved_pt_pin_4"
-            ],
-            "description": "需要保留的pt_pin列表，这些CK不会被更新或删除"
+            "value": {
+                "default": {
+                    "pins": [
+                        "preserved_pt_pin_1",
+                        "preserved_pt_pin_2",
+                        "preserved_pt_pin_3",
+                        "preserved_pt_pin_4"
+                    ],
+                    "mode": "exclude"
+                },
+                "panel_name_1": {
+                    "pins": [
+                        "special_pin_for_panel1"
+                    ],
+                    "mode": "include"
+                },
+                "panel_name_2": {
+                    "pins": [
+                        "special_pin_for_panel2"
+                    ],
+                    "mode": "exclude"
+                }
+            },
+            "description": "CK同步配置，可为每个面板单独设置。mode为include表示只同步列表中的CK，exclude表示不同步列表中的CK。default为默认配置，当面板名称未单独配置时使用此配置。"
         },
         
         "REDIS_HOST": {
@@ -87,8 +104,24 @@
         },
         
         "CK_FILE_PATH": {
-            "value": "path/to/your/ck.txt",
-            "description": "CK文件路径，用于存储和读取CK"
+            "value": {
+                "default": {
+                    "path": "path/to/your/ck.txt",
+                    "pins": [
+                        "example_pt_pin_1",
+                        "example_pt_pin_2"
+                    ],
+                    "mode": "exclude"
+                },
+                "backup": {
+                    "path": "path/to/your/backup_ck.txt",
+                    "pins": [
+                        "special_pin_1"
+                    ],
+                    "mode": "include"
+                }
+            },
+            "description": "CK文件路径配置，可为每个文件设置筛选规则。path为文件路径，pins为pt_pin列表，mode为include表示只保存列表中的CK，exclude表示不保存列表中的CK。default为默认配置。"
         },
         "CURRENT_IP_KEY": {
             "value": "current_ip",
