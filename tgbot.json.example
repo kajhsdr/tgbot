@@ -1,0 +1,119 @@
+{
+    "config": {
+        "TELEGRAM_TOKEN": {
+            "value": "your_telegram_bot_token_here",
+            "description": "Telegram机器人的API令牌，用于与Telegram API通信"
+        },
+        "TG_USER_IDS": {
+            "value": ["your_telegram_user_id_here"],
+            "description": "允许使用此机器人的Telegram用户ID列表"
+        },
+        "TELEGRAM_PROXY_API": {
+            "value": "https://your_telegram_proxy_api_here",
+            "description": "Telegram API代理地址，用于在无法直接访问Telegram API的环境中使用"
+        },
+        
+        "QL_URL": {
+            "value": "http://your_qinglong_url_here:5700",
+            "description": "主青龙面板的URL地址"
+        },
+        "CLIENT_ID": {
+            "value": "your_client_id_here",
+            "description": "主青龙面板的Client ID，用于API认证"
+        },
+        "CLIENT_SECRET": {
+            "value": "your_client_secret_here",
+            "description": "主青龙面板的Client Secret，用于API认证"
+        },
+        
+        "QL_PANELS": {
+            "value": [
+                {
+                    "name": "panel_name_1",
+                    "url": "http://panel_url_1:port",
+                    "client_id": "panel_client_id_1",
+                    "client_secret": "panel_client_secret_1"
+                },
+                {
+                    "name": "panel_name_2",
+                    "url": "http://panel_url_2:port",
+                    "client_id": "panel_client_id_2",
+                    "client_secret": "panel_client_secret_2"
+                },
+                {
+                    "name": "panel_name_3",
+                    "url": "http://panel_url_3:port",
+                    "client_id": "panel_client_id_3",
+                    "client_secret": "panel_client_secret_3"
+                }
+            ],
+            "description": "其他青龙面板配置列表，用于CK同步"
+        },
+        
+        "PRESERVED_PT_PINS": {
+            "value": [
+                "preserved_pt_pin_1",
+                "preserved_pt_pin_2",
+                "preserved_pt_pin_3",
+                "preserved_pt_pin_4"
+            ],
+            "description": "需要保留的pt_pin列表，这些CK不会被更新或删除"
+        },
+        
+        "REDIS_HOST": {
+            "value": "your_redis_host",
+            "description": "Redis服务器地址"
+        },
+        "REDIS_PORT": {
+            "value": 6379,
+            "description": "Redis服务器端口"
+        },
+        "REDIS_DB": {
+            "value": 0,
+            "description": "Redis数据库编号"
+        },
+        "REDIS_PASSWORD": {
+            "value": "your_redis_password",
+            "description": "Redis数据库密码"
+        },
+        
+        "PROXY_AUTH_KEY": {
+            "value": "your_proxy_auth_key",
+            "description": "代理API认证密钥"
+        },
+        "PROXY_API_URL": {
+            "value": "https://your_proxy_api_url",
+            "description": "代理API地址，用于获取和更新IP白名单"
+        },
+        
+        "CK_FILE_PATH": {
+            "value": "path/to/your/ck.txt",
+            "description": "CK文件路径，用于存储和读取CK"
+        },
+        "CURRENT_IP_KEY": {
+            "value": "current_ip",
+            "description": "Redis中存储当前IP的键名"
+        },
+        "CURRENT_CK_HASH_KEY": {
+            "value": "current_ck_hash",
+            "description": "Redis中存储当前CK哈希值的键名"
+        },
+        "LOG_DIR": {
+            "value": "path/to/your/logs",
+            "description": "日志文件目录"
+        },
+        
+        "CK_UPDATE_INTERVAL": {
+            "value": 20,
+            "description": "CK更新间隔，单位为分钟"
+        },
+        "IP_UPDATE_INTERVAL": {
+            "value": 5,
+            "description": "IP白名单更新间隔，单位为分钟"
+        },
+        "CK_SYNC_INTERVAL": {
+            "value": 30,
+            "description": "CK同步到其他面板的间隔，单位为分钟"
+        }
+    }
+}
